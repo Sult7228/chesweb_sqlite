@@ -1,0 +1,144 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess vs AI</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif; color: white; }
+        .container { display: flex; gap: 30px; align-items: flex-start; padding: 20px; }
+        #board { width: 480px; }
+        .panel { background: #16213e; border-radius: 12px; padding: 24px; width: 220px; display: flex; flex-direction: column; gap: 16px; }
+        .panel h2 { font-size: 20px; text-align: center; }
+        #status { background: #0f3460; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; min-height: 48px; }
+        select, button { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; margin-top: 4px; }
+        select { background: #0f3460; color: white; }
+        .btn-new { background: #e94560; color: white; font-weight: bold; }
+        .btn-flip { background: #0f3460; color: white; }
+        .btn-local { background: #4CAF50; color: white; font-weight: bold; }
+        label { font-size: 13px; color: #aaa; }
+        a { text-decoration: none; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div>
+        <h1 style="font-size:24px;margin-bottom:16px;text-align:center">♟ Chess vs AI</h1>
+        <div id="board"></div>
+    </div>
+    <div class="panel">
+        <h2>Настройки</h2>
+        <div>
+            <label>Сложность</label>
+            <select id="difficulty">
+                <option value="1">Новичок</option>
+                <option value="5" selected>Средний</option>
+                <option value="10">Сильный</option>
+                <option value="15">Максимум</option>
+            </select>
+        </div>
+        <div>
+            <label>Играть за</label>
+            <select id="color">
+                <option value="white">Белые</option>
+                <option value="black">Чёрные</option>
+            </select>
+        </div>
+        <div id="status">Загрузка ИИ...</div>
+        <button class="btn-flip" onclick="board.flip()">Перевернуть доску</button>
+        <button class="btn-new" onclick="newGame()">Новая игра</button>
+        <a href="/local/"><button class="btn-local">Играть 1х1</button></a>
+    </div>
+</div>
+
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+    let game = new Chess();
+    let board, playerColor = 'white', thinking = false;
+    let stockfish = new Worker("{% static 'chess_ai/stockfish.js' %}");
+
+    stockfish.onmessage = function(e) {
+        let msg = e.data;
+        if (msg && msg.startsWith('bestmove')) {
+            let move = msg.split(' ')[1];
+            if (move && move !== '(none)') {
+                game.move(move, { sloppy: true });
+                board.position(game.fen());
+            }
+            thinking = false;
+            updateStatus();
+        }
+    };
+
+    stockfish.postMessage('uci');
+    stockfish.postMessage('isready');
+
+    function onDragStart(source, piece) {
+        if (game.game_over() || thinking) return false;
+        if (playerColor === 'white' && piece.search(/^b/) !== -1) return false;
+        if (playerColor === 'black' && piece.search(/^w/) !== -1) return false;
+        if (game.turn() !== playerColor[0]) return false;
+    }
+
+    function onDrop(source, target) {
+        let move = game.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+        updateStatus();
+        if (!game.game_over()) setTimeout(makeAiMove, 300);
+    }
+
+    function onSnapEnd() { board.position(game.fen()); }
+
+    function makeAiMove() {
+        thinking = true;
+        setStatus('ИИ думает...');
+        let depth = parseInt(document.getElementById('difficulty').value);
+        stockfish.postMessage('position fen ' + game.fen());
+        stockfish.postMessage('go depth ' + depth);
+    }
+
+    function updateStatus() {
+        if (game.in_checkmate()) setStatus((game.turn() === 'w' ? 'Чёрные' : 'Белые') + ' победили! 🏆');
+        else if (game.in_draw()) setStatus('Ничья! 🤝');
+        else if (game.in_check()) setStatus('Шах! ⚠️');
+        else setStatus(game.turn() === playerColor[0] ? 'Ваш ход' : 'Ход ИИ');
+    }
+
+    function setStatus(text) { document.getElementById('status').innerText = text; }
+
+    function newGame() {
+        game = new Chess();
+        playerColor = document.getElementById('color').value;
+        board.orientation(playerColor);
+        board.start();
+        thinking = false;
+        stockfish.postMessage('ucinewgame');
+        updateStatus();
+        if (playerColor === 'black') setTimeout(makeAiMove, 500);
+    }
+
+board = Chessboard('board', {
+        draggable: true, position: 'start',
+        onDragStart, onDrop, onSnapEnd,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    });
+
+    document.getElementById('color').addEventListener('change', function() {
+        playerColor = this.value;
+        board.orientation(playerColor);
+        game = new Chess();
+        board.start();
+        thinking = false;
+        stockfish.postMessage('ucinewgame');
+        updateStatus();
+        if (playerColor === 'black') setTimeout(makeAiMove, 500);
+    });
+
+    setTimeout(() => { setStatus('Ваш ход'); }, 2000);
+</script>
+</body>
+</html>

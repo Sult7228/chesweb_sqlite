@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Chess 1v1</title>
+    <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif; color: white; }
+        .container { display: flex; gap: 30px; align-items: flex-start; padding: 20px; }
+        #board { width: 480px; }
+        .panel { background: #16213e; border-radius: 12px; padding: 24px; width: 220px; display: flex; flex-direction: column; gap: 16px; }
+        .panel h2 { font-size: 20px; text-align: center; }
+        #status { background: #0f3460; border-radius: 8px; padding: 12px; text-align: center; font-size: 15px; font-weight: bold; min-height: 48px; }
+        button { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; margin-top: 4px; }
+        .btn-new { background: #e94560; color: white; font-weight: bold; }
+        .btn-flip { background: #0f3460; color: white; }
+        .btn-ai { background: #4CAF50; color: white; font-weight: bold; }
+        a { text-decoration: none; }
+        .moves { background: #0f3460; border-radius: 8px; padding: 10px; font-size: 12px; max-height: 200px; overflow-y: auto; }
+        .moves p { margin: 2px 0; color: #aaa; }
+    </style>
+</head>
+<body>
+<div class="container">
+    <div>
+        <h1 style="font-size:24px;margin-bottom:16px;text-align:center">♟ Chess 1v1</h1>
+        <div id="board"></div>
+    </div>
+    <div class="panel">
+        <h2>Игра 1х1</h2>
+        <div id="status">Ход белых ⬜</div>
+        <div class="moves" id="moves"><p>История ходов</p></div>
+        <button class="btn-flip" onclick="board.flip()">Перевернуть доску</button>
+        <button class="btn-new" onclick="newGame()">Новая игра</button>
+        <a href="/"><button class="btn-ai">Играть vs ИИ</button></a>
+    </div>
+</div>
+<script src="https://code.jquery.com/jquery-3.7.1.min.js"></script>
+<script src="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/chess.js/0.10.3/chess.min.js"></script>
+<script>
+    let game = new Chess();
+    let board;
+
+    function onDragStart(source, piece) {
+        if (game.game_over()) return false;
+        if (game.turn() === 'w' && piece.search(/^b/) !== -1) return false;
+        if (game.turn() === 'b' && piece.search(/^w/) !== -1) return false;
+    }
+
+    function onDrop(source, target) {
+        let move = game.move({ from: source, to: target, promotion: 'q' });
+        if (move === null) return 'snapback';
+        updateStatus();
+        addMove(move);
+    }
+
+    function onSnapEnd() { board.position(game.fen()); }
+
+    function updateStatus() {
+        if (game.in_checkmate()) {
+            let winner = game.turn() === 'w' ? 'Чёрные' : 'Белые';
+            document.getElementById('status').innerText = winner + ' победили! 🏆';
+        } else if (game.in_draw()) {
+            document.getElementById('status').innerText = 'Ничья! 🤝';
+        } else if (game.in_check()) {
+            let turn = game.turn() === 'w' ? 'Белые' : 'Чёрные';
+            document.getElementById('status').innerText = turn + ' — Шах! ⚠️';
+        } else {
+            document.getElementById('status').innerText = game.turn() === 'w' ? 'Ход белых ⬜' : 'Ход чёрных ⬛';
+        }
+    }
+
+    function addMove(move) {
+        let movesDiv = document.getElementById('moves');
+        let p = document.createElement('p');
+        p.innerText = game.history().length + '. ' + move.san;
+        movesDiv.appendChild(p);
+        movesDiv.scrollTop = movesDiv.scrollHeight;
+    }
+
+    function newGame() {
+        game = new Chess();
+        board.start();
+        document.getElementById('moves').innerHTML = '<p>История ходов</p>';
+        updateStatus();
+    }
+
+    board = Chessboard('board', {
+        draggable: true, position: 'start',
+        onDragStart, onDrop, onSnapEnd,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    });
+</script>
+</body>
+</html>

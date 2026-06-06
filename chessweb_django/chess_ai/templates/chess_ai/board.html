@@ -7,12 +7,28 @@
     <link rel="stylesheet" href="https://unpkg.com/@chrisoakman/chessboardjs@1.0.0/dist/chessboard-1.0.0.min.css">
     <style>
         * { box-sizing: border-box; margin: 0; padding: 0; }
-        body { background: #1a1a2e; display: flex; justify-content: center; align-items: center; min-height: 100vh; font-family: Arial, sans-serif; color: white; }
-        .container { display: flex; gap: 30px; align-items: flex-start; padding: 20px; }
+        body { background: linear-gradient(135deg, #0a1628 0%, #0d2137 40%, #0a3d2e 100%); min-height: 100vh; font-family: Arial, sans-serif; color: white; }
+        .navbar {
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 12px 24px; background: #16213e;
+            border-bottom: 1px solid #0f3460;
+        }
+        .navbar-brand { font-size: 20px; font-weight: bold; }
+        .navbar-links { display: flex; gap: 10px; }
+        .btn-nav {
+            padding: 8px 16px; border-radius: 8px; border: none;
+            font-size: 14px; cursor: pointer; text-decoration: none;
+            display: inline-block;
+        }
+        .btn-register { background: #e94560; color: white; font-weight: bold; }
+        .btn-login { background: #0f3460; color: white; }
+        .btn-docs { background: #4CAF50; color: white; }
+
+        .main { display: flex; justify-content: center; align-items: flex-start; padding: 30px 20px; gap: 30px; }
         #board { width: 480px; }
         .panel { background: #16213e; border-radius: 12px; padding: 24px; width: 220px; display: flex; flex-direction: column; gap: 16px; }
         .panel h2 { font-size: 20px; text-align: center; }
-        #status { background: #0f3460; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; min-height: 48px; }
+        #status { background: #0f3460; border-radius: 8px; padding: 12px; text-align: center; font-size: 14px; min-height: 48px; line-height: 1.5; }
         select, button { width: 100%; padding: 10px; border-radius: 8px; border: none; font-size: 14px; cursor: pointer; margin-top: 4px; }
         select { background: #0f3460; color: white; }
         .btn-new { background: #e94560; color: white; font-weight: bold; }
@@ -23,9 +39,25 @@
     </style>
 </head>
 <body>
-<div class="container">
+
+<nav class="navbar">
+    <div class="navbar-brand">♟ Chess Platform</div>
+    <div class="navbar-links">
+        <a href="/api/docs/" class="btn-nav btn-docs">API Docs</a>
+        <a href="/admin/auth/user/" class="btn-nav btn-login">Админка</a>
+        {% if request.user.is_authenticated %}
+            <span style="padding:8px 12px;color:rgba(255,255,255,0.7)">👤 {{ request.user.username }}</span>
+            <a href="/api/logout/" class="btn-nav" style="background:#555;color:white;">Выйти</a>
+        {% else %}
+            <a href="/api/login/" class="btn-nav btn-login">Войти</a>
+            <a href="/api/register/" class="btn-nav btn-register">Регистрация</a>
+        {% endif %}
+    </div>
+</nav>
+
+<div class="main">
     <div>
-        <h1 style="font-size:24px;margin-bottom:16px;text-align:center">♟ Chess vs AI</h1>
+        <h1 style="font-size:24px;margin-bottom:16px;text-align:center">Chess vs AI</h1>
         <div id="board"></div>
     </div>
     <div class="panel">
@@ -47,8 +79,8 @@
             </select>
         </div>
         <div id="status">Загрузка ИИ...</div>
-        <button class="btn-flip" onclick="board.flip()">Перевернуть доску</button>
-        <button class="btn-new" onclick="newGame()">Новая игра</button>
+        <button class="btn-flip" onclick="flipBoard()">Перевернуть доску</button>
+    <button class="btn-new" onclick="newGame()">Новая игра</button>
         <a href="/local/"><button class="btn-local">Играть 1х1</button></a>
     </div>
 </div>
@@ -110,32 +142,41 @@
 
     function setStatus(text) { document.getElementById('status').innerText = text; }
 
+    function flipBoard() {
+    board.flip();
+    playerColor = playerColor === 'white' ? 'black' : 'white';
+    game = new Chess();
+    board.position('start');
+    thinking = false;
+    stockfish.postMessage('ucinewgame');
+    document.getElementById('color').value = playerColor;
+    updateStatus();
+    if (playerColor === 'black') setTimeout(makeAiMove, 500);
+}
+
     function newGame() {
         game = new Chess();
         playerColor = document.getElementById('color').value;
         board.orientation(playerColor);
-        board.start();
+        board.position('start');
         thinking = false;
         stockfish.postMessage('ucinewgame');
         updateStatus();
         if (playerColor === 'black') setTimeout(makeAiMove, 500);
     }
 
-board = Chessboard('board', {
-        draggable: true, position: 'start',
-        onDragStart, onDrop, onSnapEnd,
-        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
+    document.getElementById('color').addEventListener('change', function() {
+        newGame();
     });
 
-    document.getElementById('color').addEventListener('change', function() {
-        playerColor = this.value;
-        board.orientation(playerColor);
-        game = new Chess();
-        board.start();
-        thinking = false;
-        stockfish.postMessage('ucinewgame');
-        updateStatus();
-        if (playerColor === 'black') setTimeout(makeAiMove, 500);
+    board = Chessboard('board', {
+        draggable: true,
+        position: 'start',
+        orientation: 'white',
+        onDragStart: onDragStart,
+        onDrop: onDrop,
+        onSnapEnd: onSnapEnd,
+        pieceTheme: 'https://chessboardjs.com/img/chesspieces/wikipedia/{piece}.png'
     });
 
     setTimeout(() => { setStatus('Ваш ход'); }, 2000);
